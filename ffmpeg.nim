@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025 gremlin art
+# Copyright (c) 2025-2026 gremlin art
 #
 # This file is part of autoscrub.
 #
@@ -27,8 +27,7 @@
 ##   * audio filters: silencedetect
 ##   * multimedia filters: ebur128
 ##
-
-import std/[logging, os, osproc, strformat, strutils, with]
+import std/[logging, math, os, osproc, sequtils, strformat, strutils, with]
 
 type
   FFmpeg* = object
@@ -37,8 +36,8 @@ type
   FFmpegError = object of CatchableError
   FilePath = distinct string
   
-  Segment* = tuple[start, `end`: float] # timestamps
-  Segments* = seq[Segment]
+  Segment* = object
+    start*, `end`*: float # timestamps
 
 proc find_exe(filename: string): string =
   ## Wrapper for std/os.findExe proc.
@@ -54,6 +53,7 @@ proc exec(cmd: FilePath; args: openArray[string]; begins_with = ""; last: Natura
   ## Raises on non-zero exit code.
   var po = {poStdErrToStdOut}
   when not defined release: po.incl poEchoCmd
+  
   let p = startProcess(string cmd, args=args, options=po)
   defer: close p
   
@@ -102,7 +102,7 @@ template parseIt(label, body) =
     let it {.inject.} = line[idx + label.len + 2 ..^ 1]
     body
 
-proc detect_silences*(f; threshold, duration: float): Segments =
+proc detect_silences*(f; threshold, duration: float): seq[Segment] =
   ## Scans audio with silencedetect filter.
   ## Returns the timestamps of silences.
   # autoscrub-0.7.5/scripts/cli.py:create_filtergraph()
@@ -118,7 +118,7 @@ proc detect_silences*(f; threshold, duration: float): Segments =
   for line in output:
     var idx: int
     parseIt "silence_start":
-      result.add (parseFloat it, 0.0)
+      result.add Segment(start: parseFloat it)
       continue
     
     parseIt "silence_end":
@@ -145,3 +145,16 @@ proc get_loudness*(f): float =
         "-"
       ])
   parseFloat output[^lines].splitWhitespace(3)[1]
+
+func speedup_audio_tempo*(factor: float): string =
+  ## Returns atempo filter for speeding up audio by `factor`.
+  # autoscrub-0.7.5/__init__.py:silenceFilterGraph()
+  let
+    q = log(factor, 2)  # 2: tempo greater than 2 will skip some samples
+    int_q = int trunc q
+  assert int_q >= 0
+  
+  var tempos = ["atempo=2.0"].cycle int_q
+  if q != float int_q:
+    tempos.add fmt"atempo={factor}/{2 ^ int_q}"
+  tempos.join ","
