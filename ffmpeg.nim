@@ -146,6 +146,9 @@ proc get_loudness*(f): float =
       ])
   parseFloat output[^lines].splitWhitespace(3)[1]
 
+template csv*(a: openarray[string]): string =
+  a.join ", "
+
 func speedup_audio_tempo*(factor: float): string =
   ## Returns atempo filter for speeding up audio by `factor`.
   # autoscrub-0.7.5/__init__.py:silenceFilterGraph()
@@ -157,4 +160,5 @@ func speedup_audio_tempo*(factor: float): string =
   var tempos = ["atempo=2.0"].cycle int_q
   if q != float int_q:
     tempos.add fmt"atempo={factor}/{2 ^ int_q}"
-  tempos.join ","
+  
+  csv tempos

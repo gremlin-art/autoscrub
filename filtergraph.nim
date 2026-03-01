@@ -101,13 +101,10 @@ func trim_filters(g; seg: Segment): tuple[before_silence, the_silence: string] =
 
 func add(g; video_filters, audio_filters: openarray[string]) =
   inc g.segments
-  let
-    node = g.segments
-    v = video_filters.join ", "
-    a = audio_filters.join ", "
+  let n = g.segments
   g.nodes.add [
-    fmt"{v_in} {v} [v{node}]",
-    fmt"{a_in} {a} [a{node}]"
+    fmt"{v_in} {csv video_filters} [v{n}]",
+    fmt"{a_in} {csv audio_filters} [a{n}]"
     ]
 
 func add(g; filters: openarray[string]) =
@@ -120,7 +117,7 @@ func trim_silences(g) =
   ##   unlike Python autoscrub.
   let
     factor = g.silence.speed
-    speedup_audio = [fmt"a{setpts}", speedup_audio_tempo factor].join " ,"
+    speedup_audio = csv [fmt"a{setpts}", speedup_audio_tempo factor]
     speedup_video = fmt"setpts=(PTS-STARTPTS)/{factor}"
   for segment in g.silence.segments:
     let trim = g.trim_filters segment
@@ -142,8 +139,8 @@ func concat_segments(g) =
   assert g.nodes.len != 0
   assert g.nodes.len div 2 == g.segments
   var filter: string
-  for node in 1 .. g.segments:
-    filter.add fmt"[v{node}][a{node}] "
+  for n in 1 .. g.segments:
+    filter.add fmt"[v{n}][a{n}] "
   
   g.nodes.add filter & fmt"concat=n={g.segments}:v=1:a=1 {v_out} {a_out}"
 
@@ -170,4 +167,5 @@ func finally_adjust_volume*(g; gain: float) =
 
 func complex_filtergraph*(g): string =
   ## Returns formatted text for :program:`ffmpeg` -filter_complex argument.
-  g.nodes.join ";\n"
+  result = g.nodes.join ";\n"
+  result &= ";"
