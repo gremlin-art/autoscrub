@@ -23,8 +23,6 @@
 import std/[logging, os, strformat]
 import ffmpeg, filtergraph
 
-const buildInfo = "build: " & staticExec"git rev-parse HEAD"[0..6]
-
 type Scrub = object
   ffmpeg: FFmpeg
   gain: float
@@ -74,6 +72,8 @@ proc write_filtergraph(s) =
 
 proc main =
   addHandler newConsoleLogger()
+  
+  const buildInfo = "build: " & staticExec"git rev-parse HEAD"[0..6]
   info buildInfo
   
   let infile = commandLineParams()[0]

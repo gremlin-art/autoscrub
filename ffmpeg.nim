@@ -146,7 +146,10 @@ proc get_loudness*(f): float =
       ])
   parseFloat output[^lines].splitWhitespace(3)[1]
 
-template csv*(a: openarray[string]): string =
+func csv*(a: openarray[string]): string =
+  ## Returns comma separated values.
+  ##
+  ## .. hint:: representing sequence of filters.
   a.join ", "
 
 func speedup_audio_tempo*(factor: float): string =

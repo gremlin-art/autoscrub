@@ -64,7 +64,7 @@ type
     speed = 8.0               ## to fast forward (--speed)
     threshold* = -18.0        ## decibels considered silent (--target-threshold)
 
-proc initSilence*(margin = 0.25, mininum_duration = 2.0): Silence =
+func initSilence*(margin = 0.25, mininum_duration = 2.0): Silence =
   ## By default, fast forward 2.0+ seconds of silence (silent segment)
   ## except the first and last 0.25 seconds `margin` of each silent segment.
   # autoscrub-0.7.5/scripts/cli.py:make_filtergraph()
@@ -107,8 +107,19 @@ func add(g; video_filters, audio_filters: openarray[string]) =
     fmt"{a_in} {csv audio_filters} [a{n}]"
     ]
 
+func audio_filter(filter: string): string =
+  ## Returns audio version of `filter`.
+  assert ["copy", "setpts", "trim"].anyIt filter.startsWith it & "="
+  "a" & filter
+
 func add(g; filters: openarray[string]) =
-  g.add filters, filters.mapIt("a" & it)
+  g.add filters, filters.mapIt audio_filter it
+
+func filter_to_speedup_audio(g): string =
+  csv [audio_filter setpts, speedup_audio_tempo g.silence.speed]
+
+func filter_to_speedup_video(g): string =
+  fmt"setpts=(PTS-STARTPTS)/{g.silence.speed}"
 
 func trim_silences(g) =
   ## Fast-forward silent parts of video.
@@ -116,16 +127,12 @@ func trim_silences(g) =
   ## .. note:: does not ignore silence at beginning and end of video
   ##   unlike Python autoscrub.
   let
-    factor = g.silence.speed
-    speedup_audio = csv [fmt"a{setpts}", speedup_audio_tempo factor]
-    speedup_video = fmt"setpts=(PTS-STARTPTS)/{factor}"
+    speedup_audio = g.filter_to_speedup_audio
+    speedup_video = g.filter_to_speedup_video
   for segment in g.silence.segments:
     let trim = g.trim_filters segment
     g.add [trim.before_silence, setpts]
-    g.add(
-      [trim.the_silence, speedup_video],
-      ["a" & trim.the_silence, speedup_audio]
-     )
+    g.add [trim.the_silence, speedup_video], [audio_filter trim.the_silence, speedup_audio]
 
 func keep_final_segment(g) =
   ## Appends remaining video after the last silence.
@@ -157,8 +164,9 @@ func finally_adjust_volume*(g; gain: float) =
   # autoscrub-0.7.5/__init__.py:panGainAudioGraph()
   if gain == 0: return
   
-  const a_in = "[an]"
   template last_node: auto = g.nodes[^1]
+  
+  const a_in = "[an]"
   assert last_node.endsWith a_out
   last_node.removeSuffix a_out
   last_node.add a_in
@@ -167,5 +175,6 @@ func finally_adjust_volume*(g; gain: float) =
 
 func complex_filtergraph*(g): string =
   ## Returns formatted text for :program:`ffmpeg` -filter_complex argument.
+  assert g.nodes.len != 0
   result = g.nodes.join ";\n"
   result &= ";"
