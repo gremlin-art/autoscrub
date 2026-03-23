@@ -47,7 +47,7 @@ proc find_exe(filename: string): string =
   if result == "":
     raise newException(FFmpegError, fmt"{filename} not in path")
 
-proc exec(cmd: FilePath; args: openArray[string]; begins_with = ""; last: Natural = 0): seq[string] =
+proc exec(cmd: FilePath; args: openArray[string]; begins_with = ""): seq[string] =
   ## Executes `cmd` with given `args` and returns the output.
   ##
   ## Raises on non-zero exit code.
@@ -62,16 +62,13 @@ proc exec(cmd: FilePath; args: openArray[string]; begins_with = ""; last: Natura
       continue
     result.add line
     
-    if last != 0 and result.len > last:
-      result.delete 0
-  
   let exitCode = p.peekExitCode
   if exitCode != 0:
     raise newException(FFmpegError, fmt"{exitCode=}")
 
 using f: FFmpeg
 
-proc exec(f; options: openArray[string]; begins_with = ""; last = 0): seq[string] =
+proc exec(f; options: openArray[string]; begins_with = ""): seq[string] =
   ## Executes :program:`ffmpeg` with given arguments and returns the output.
   var args = @[
     "-hide_banner",
@@ -81,7 +78,7 @@ proc exec(f; options: openArray[string]; begins_with = ""; last = 0): seq[string
   
   args.add options
   
-  f.exe.exec(args, begins_with, last)
+  f.exe.exec args, begins_with
 
 func major_version(f): int =
   parseInt f.version.substr(1).split('.', 1)[0]
@@ -137,10 +134,8 @@ proc get_loudness*(f): float =
   let
     lines = if f.major_version > 6: 10 else: 8 # workaround broken '-nostats'
     output = f.exec(
-      last = lines,
       options = [
-        "-c:v", "copy",
-        "-af", "ebur128",
+        "-af", "ebur128=framelog=quiet",
         "-f", "null",
         "-"
       ])
